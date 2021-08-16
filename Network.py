@@ -1,6 +1,6 @@
 from typing import List
 import torch
-import math
+import numpy as np
 
 
 class Network(torch.nn.Module):
@@ -42,7 +42,7 @@ class Network(torch.nn.Module):
 
         # boundary conditions
         # See: https://github.com/EverettYou/EFL
-        self.h = flavor * c * math.log(2) / 2
+        self.h = flavor * c * np.log(2) / 2
         self.h0 = self.h * torch.ones(self.stats["size"], dtype=torch.float64)
 
         # trainable parameter
@@ -51,13 +51,24 @@ class Network(torch.nn.Module):
         # setup optimizer
         self.optimizer = torch.optim.Adam(self.parameters(), lr=0.002, betas=(0.9, 0.9))
 
-    def index(self, layer, cell, position):
+    def index(self, layer: int, cell: int, position: int) -> int:
+        """
+        Assigns a given node to its matrix position.
+        :param layer: layer the node belongs to
+        :param cell: cell the node belongs to
+        :param position: position within the cell
+        :return: index in the adjacent matrix
+        """
         if self.indices[layer, cell, position] == -1:
             self.indices[layer, cell, position] = self.nodes
             self.nodes += 1
         return self.indices[layer, cell, position]
 
     def fill_layer(self):
+        """
+        Assigns the nodes and cells to the layers
+        :return: void
+        """
         for layer_i, (layeruv, layerir) in enumerate(zip([0] + self.structure, self.structure + [0])):
             pattern = [1] if layer_i == 0 else [-1] if layer_i == self.stats["depth"] else self.pattern
             layer = {-1: [], 1: []}
@@ -66,7 +77,12 @@ class Network(torch.nn.Module):
             self.layers.append(layer)
 
     def fill_adjacent(self):
-        # See: https://github.com/EverettYou/EFL
+        """
+        Fills the adjacent matrix for the given network structure.
+        See: https://github.com/EverettYou/EFL
+        :return: void
+        """
+
         for layer_i, layer in enumerate(self.layers):
             for i in range(len(layer[1]) + len(layer[-1])):
                 self.a1[self.index(layer_i, i, 0), self.index(layer_i, i, 1)] = 1
@@ -120,7 +136,14 @@ class Network(torch.nn.Module):
 
         self.awJ = self.awJ[1:, :, :]
 
-    def train_it(self, data, solutions, its=1):
+    def train_it(self, data: np.array, solutions: np.array, its: int = 1) -> List[float]:
+        """
+        Train the network with the given data.
+        :param data: 2D array of configurations (input for the network) \forall x \in array: x \in {-1, 1}
+        :param solutions: 1D array of floats (2nd Reni entropy of the network) for the given data
+        :param its: number of iterations to train network with
+        :return: list of losses (loss per iteration)
+        """
         h_s = self.h * torch.from_numpy(data)
 
         ah0 = torch.tensordot(torch.exp(2. * self.h0), self.awh, dims=1)
@@ -133,7 +156,8 @@ class Network(torch.nn.Module):
             a_s = ah_s + self.a1 + aJ
             a0 = ah0 + self.a1 + aJ
 
-            f0 = -0.5 * torch.linalg.slogdet(a0)[1] + torch.sum(self.J * self.count_J) + torch.sum(self.h0 * self.count_h)
+            f0 = -0.5 * torch.linalg.slogdet(a0)[1] + torch.sum(self.J * self.count_J) + torch.sum(
+                self.h0 * self.count_h)
             fs = -0.5 * torch.linalg.slogdet(a_s)[1] + torch.sum(self.J * self.count_J) + (h_s * self.count_h).sum(-1)
 
             loss = torch.mean(torch.square(torch.sub(fs, f0) / torch.from_numpy(solutions) - 1.))
