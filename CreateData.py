@@ -2,6 +2,10 @@ from typing import List
 import numpy as np
 
 
+# make results reproducible
+np.random.seed(4166)
+
+
 class DataGenerator:
 
     """

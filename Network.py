@@ -3,6 +3,10 @@ import torch
 import numpy as np
 
 
+# make results reproducible
+torch.manual_seed(3841)
+
+
 class Network(torch.nn.Module):
 
     def __init__(self, structure: List[int], flavor: int = 1, c: float = 0., pattern: List[int] = [-1, -1, 1]):
@@ -144,6 +148,7 @@ class Network(torch.nn.Module):
         :param its: number of iterations to train network with
         :return: list of losses (loss per iteration)
         """
+        self.train()
         h_s = self.h * torch.from_numpy(data)
 
         ah0 = torch.tensordot(torch.exp(2. * self.h0), self.awh, dims=1)
@@ -161,8 +166,29 @@ class Network(torch.nn.Module):
             fs = -0.5 * torch.linalg.slogdet(a_s)[1] + torch.sum(self.J * self.count_J) + (h_s * self.count_h).sum(-1)
 
             loss = torch.mean(torch.square(torch.sub(fs, f0) / torch.from_numpy(solutions) - 1.))
-            losses.append(loss.item())
-            loss.backward()
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+            losses.append((loss.item(), torch.sub(fs, f0).detach().numpy()))  # FIXME: loss gibt sachen mit aus
+            #loss.backward()
+            #self.optimizer.step()
+            #self.optimizer.zero_grad()
+
+            self.force_boundaries()
+        self.eval()
         return losses
+
+    def force_boundaries(self):
+        """
+        This is not an actual regularization.
+        It forces the values to be in a certain rage and manually fixes them with min() and max().
+        Furthermore, it does not force J_1 <= J_2 <= J_3 ... at each moment.
+        Due to the simple shift in cat the following can occur:
+        J (at the moment): 0.3778, 0.2750, 0.2748, 0.2751, 0.2755
+        Comparison Tensor: 2.7726, 0.3778, 0.2750, 0.2748, 0.2751
+        J (after the com): 0.3778, 0.2750, 0.2748, 0.2748, 0.2751
+        :return:
+        """
+        with torch.no_grad():
+            j = torch.maximum(self.J, torch.zeros(self.J.size()))
+            h = torch.tensor([self.h], dtype=torch.float64)
+            state_dict = self.state_dict()
+            state_dict['J'] = torch.nn.Parameter(torch.minimum(self.J, torch.cat((h, j[:-1]))))
+            self.load_state_dict(state_dict)
