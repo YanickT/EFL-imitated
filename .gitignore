@@ -2,3 +2,5 @@
 venv
 other
 __pycache__
+RBM.py
+main_test.py

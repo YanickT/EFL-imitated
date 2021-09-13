@@ -166,7 +166,7 @@ class Network(torch.nn.Module):
             fs = -0.5 * torch.linalg.slogdet(a_s)[1] + torch.sum(self.J * self.count_J) + (h_s * self.count_h).sum(-1)
 
             loss = torch.mean(torch.square(torch.sub(fs, f0) / torch.from_numpy(solutions) - 1.))
-            losses.append((loss.item(), torch.sub(fs, f0).detach().numpy()))  # FIXME: loss gibt sachen mit aus
+            losses.append(loss.item())
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
