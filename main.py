@@ -11,7 +11,6 @@ network = Network([32, 16, 8, 4, 2], c=4.0, flavor=2)
 energys = []
 for i, batch in zip(range(40), gen):
     print(i)
-    # FIXME: Training bei Netzwerk ausgeschalten (opimizer wird nicht mehr aufgerufen)
     loss = network.train_it(*batch, its=16)
     # plt.plot(list(range(len(loss))), loss)
     # plt.xlabel("Iterations")
